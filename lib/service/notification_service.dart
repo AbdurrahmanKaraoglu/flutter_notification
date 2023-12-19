@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_call_notification_test/main.dart';
+import 'package:flutter_call_notification_test/second_page.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:get/get.dart';
 
 class ReceivedNotification {
   ReceivedNotification({
@@ -49,12 +53,14 @@ const String darwinNotificationCategoryText = 'textCategory';
 const String darwinNotificationCategoryPlain = 'plainCategory';
 
 class NotificationService {
-  ///---------------------------
-
-  static AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('app_icon');
+  bool notificationsEnabled = false;
 
   ///---------------------------
-  static Future<void> forgroundNotification() async {
+
+  static AndroidInitializationSettings initializationSettingsAndroid = const AndroidInitializationSettings('app_icon');
+
+  ///---------------------------
+  static Future<void> backgroundNotification() async {
     final List<DarwinNotificationCategory> darwinNotificationCategories = <DarwinNotificationCategory>[
       DarwinNotificationCategory(
         darwinNotificationCategoryText,
@@ -137,5 +143,105 @@ class NotificationService {
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
+  }
+
+  //---------------------------------------------------------
+  Future<void> showNotificationWithActions() async {
+    AndroidNotificationDetails androidNotificationDetails = const AndroidNotificationDetails(
+      'your channel id',
+      'your channel name',
+      channelDescription: 'your channel description',
+      importance: Importance.max,
+      priority: Priority.high,
+      ticker: 'ticker',
+      fullScreenIntent: true,
+      playSound: true,
+      enableVibration: true,
+      ongoing: true,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          urlLaunchActionId,
+          'Action 1',
+          icon: DrawableResourceAndroidBitmap('food'),
+          contextual: true,
+        ),
+        AndroidNotificationAction(
+          'id_2',
+          'Action 2',
+          titleColor: Color.fromARGB(255, 255, 0, 0),
+          icon: DrawableResourceAndroidBitmap('secondary_icon'),
+        ),
+        AndroidNotificationAction(
+          navigationActionId,
+          'Action 3',
+          icon: DrawableResourceAndroidBitmap('secondary_icon'),
+          showsUserInterface: true,
+          // By default, Android plugin will dismiss the notification when the
+          // user tapped on a action (this mimics the behavior on iOS).
+          cancelNotification: false,
+        ),
+      ],
+    );
+
+    const DarwinNotificationDetails iosNotificationDetails = DarwinNotificationDetails(
+      categoryIdentifier: darwinNotificationCategoryPlain,
+    );
+
+    NotificationDetails notificationDetails = NotificationDetails(
+      android: androidNotificationDetails,
+      iOS: iosNotificationDetails,
+    );
+    int notiID = (id++);
+
+    String payload = '{"notiID": "$notiID"}';
+    await flutterLocalNotificationsPlugin.show(notiID, 'plain title', 'plain body', notificationDetails, payload: payload);
+  }
+
+  //---------------------------------------------------------
+
+  Future<void> isAndroidPermissionGranted() async {
+    if (Platform.isAndroid) {
+      final bool granted = await flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.areNotificationsEnabled() ?? false;
+
+      notificationsEnabled = granted;
+    }
+  }
+
+  Future<void> requestPermissions() async {
+    if (Platform.isIOS || Platform.isMacOS) {
+      await flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+      await flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>()?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    } else if (Platform.isAndroid) {
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation = flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+      final bool? grantedNotificationPermission = await androidImplementation?.requestNotificationsPermission();
+
+      notificationsEnabled = grantedNotificationPermission ?? false;
+    }
+  }
+
+  void configureSelectNotificationSubject() {
+    selectNotificationStream.stream.listen((String? payload) async {
+      debugPrint('payload XXXX: $payload');
+      if (payload != null) {
+        int notiID = int.parse(json.decode(payload)['notiID'] ?? "0");
+
+        await flutterLocalNotificationsPlugin.cancel(notiID);
+        await Get.to(() => SecondPage(payload, notiID: notiID, isRoute: false));
+        // payload dan gelen datalara göre işlem yapılabilir.
+
+        // await Navigator.of(context).push(MaterialPageRoute<void>(
+        //   builder: (BuildContext context) => SecondPage(payload),
+        // ));
+      }
+    });
   }
 }

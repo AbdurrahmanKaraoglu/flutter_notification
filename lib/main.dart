@@ -32,34 +32,28 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
 ///
 /// Please download the complete example app from the GitHub repository where
 /// all the setup has been done
+
+String initialRoute = "";
+late NotificationAppLaunchDetails? notificationAppLaunchDetails;
 Future<void> main() async {
   // needed if you intend to initialize in the `main` function
   WidgetsFlutterBinding.ensureInitialized();
 
   await _configureLocalTimeZone();
-
-  final NotificationAppLaunchDetails? notificationAppLaunchDetails = !kIsWeb && Platform.isLinux ? null : await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-  String initialRoute = HomePage.routeName;
+  notificationAppLaunchDetails = !kIsWeb && Platform.isLinux ? null : await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+  initialRoute = HomePage.routeName;
   if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
     // Uygulama bildirim ile açıldı ise
     // Uygulama terminate iken bildirime tıklandığı zaman burdan yönlendirme yapılıyor.
     selectedNotificationPayload = notificationAppLaunchDetails!.notificationResponse?.payload;
-    notiId = notificationAppLaunchDetails.notificationResponse?.id ?? 0;
+    notiId = notificationAppLaunchDetails!.notificationResponse?.id ?? 0;
     // initailRoute = SecondPage olarak değiştirildi.
     initialRoute = SecondPage.routeName;
   }
 
-  NotificationService.forgroundNotification();
+  NotificationService.backgroundNotification();
 
-  runApp(
-    GetMaterialApp(
-      initialRoute: initialRoute,
-      routes: <String, WidgetBuilder>{
-        HomePage.routeName: (_) => HomePage(notificationAppLaunchDetails),
-        SecondPage.routeName: (_) => SecondPage(selectedNotificationPayload, notiID: notiId, isRoute: true),
-      },
-    ),
-  );
+  runApp(const MyApp());
 }
 
 Future<void> _configureLocalTimeZone() async {
@@ -69,4 +63,55 @@ Future<void> _configureLocalTimeZone() async {
   tz.initializeTimeZones();
   final String timeZoneName = await FlutterTimezone.getLocalTimezone();
   tz.setLocalLocation(tz.getLocation(timeZoneName));
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  String? newVersion;
+  String? oldVersion;
+  bool? x;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
+      initialBinding: HomeBindings(),
+      initialRoute: initialRoute,
+      routes: <String, WidgetBuilder>{
+        HomePage.routeName: (_) => HomePage(notificationAppLaunchDetails),
+        SecondPage.routeName: (_) => SecondPage(selectedNotificationPayload, notiID: notiId, isRoute: true),
+      },
+      theme: ThemeData(
+        useMaterial3: true,
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      title: "PortOkul",
+    );
+  }
+}
+
+class HomeBindings implements Bindings {
+  @override
+  void dependencies() {}
 }
